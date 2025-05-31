@@ -1,6 +1,5 @@
 import express from 'express';
 import dotenv from 'dotenv';
-import TelegramBot from 'node-telegram-bot-api';
 import axios from 'axios';
 import bodyParser from 'body-parser';
 import { connectDB } from './uremoai_complete/lib/db.js';
@@ -82,6 +81,18 @@ async function setWebhook() {
   }
 }
 
+// ✅ Send Telegram message
+async function sendTelegram(chatId, text) {
+  try {
+    await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
+      chat_id: chatId,
+      text: text
+    });
+  } catch (err) {
+    console.error("❌ Failed to send Telegram message:", err.message);
+  }
+}
+
 // ✅ AI Handler
 async function getAIReply(prompt) {
   const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
@@ -89,7 +100,7 @@ async function getAIReply(prompt) {
     messages: [{ role: "user", content: prompt }]
   }, {
     headers: {
-      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      'Authorization': `Bearer ${openrouterApiKey}`,
       'Content-Type': 'application/json'
     }
   });
@@ -97,17 +108,4 @@ async function getAIReply(prompt) {
   return response.data.choices[0].message.content;
 }
 
-module.exports = { getAIReply };
-//telegram message handler
-bot.on('message', async (msg) => {
-  const chatId = msg.chat.id;
-  const userMessage = msg.text;
-
-  try {
-    const aiReply = await getAIReply(userMessage);
-    bot.sendMessage(chatId, aiReply);
-  } catch (error) {
-    console.error('AI Error:', error);
-    bot.sendMessage(chatId, 'Sorry, something went wrong!');
-  }
-});
+export { getAIReply };
