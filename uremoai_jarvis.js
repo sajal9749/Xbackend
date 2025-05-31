@@ -98,12 +98,16 @@ async function getAIReply(prompt) {
 }
 
 module.exports = { getAIReply };
+//telegram message handler
+bot.on('message', async (msg) => {
+  const chatId = msg.chat.id;
+  const userMessage = msg.text;
 
-// ✅ Send Telegram Message
-async function sendTelegram(chatId, text) {
-  const url = `https://api.telegram.org/bot${token}/sendMessage`;
-  return axios.post(url, {
-    chat_id: chatId,
-    text
-  });
-}
+  try {
+    const aiReply = await getAIReply(userMessage);
+    bot.sendMessage(chatId, aiReply);
+  } catch (error) {
+    console.error('AI Error:', error);
+    bot.sendMessage(chatId, 'Sorry, something went wrong!');
+  }
+});
