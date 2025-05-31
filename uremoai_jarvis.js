@@ -1,45 +1,44 @@
 import express from 'express';
-import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
-import mongoose from 'mongoose';
 import TelegramBot from 'node-telegram-bot-api';
 import axios from 'axios';
+import bodyParser from 'body-parser';
+import { connectDB } from './uremoai_complete/lib/db.js';
 import TelegramMessage from './uremoai_complete/models/telegramMessage.js';
 import Brain from './uremoai_complete/models/brain.js';
-import { connectDB } from './uremoai_complete/lib/db.js';
 
 dotenv.config();
 
-const app = express();
-const port = process.env.PORT || 10000;
-
-app.use(bodyParser.json());
-
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const openrouterApiKey = process.env.OPENROUTER_API_KEY;
+const SERVER_URL = process.env.SERVER_URL;
+const PORT = process.env.PORT || 10000;
 
-if (!token || !openrouterApiKey) {
-  console.error("❌ Missing environment variables");
+if (!token || !openrouterApiKey || !SERVER_URL) {
+  console.error("❌ Missing environment variables. Check your .env or Render settings.");
   process.exit(1);
 }
 
 await connectDB();
 
-const bot = new TelegramBot(token);
-bot.setWebHook(`https://${process.env.RENDER_EXTERNAL_HOSTNAME}/webhook`);
+const app = express();
+app.use(bodyParser.json());
 
+// ✅ Set up webhook handler
 app.post('/webhook', async (req, res) => {
   const msg = req.body.message;
-
-  if (!msg || !msg.text || msg.text.startsWith('/')) {
-    return res.sendStatus(200);
-  }
+  if (!msg || !msg.text || msg.text.startsWith('/')) return res.sendStatus(200);
 
   const chatId = msg.chat.id;
   const text = msg.text;
 
   try {
-    await new TelegramMessage({ chatId, text, date: new Date() }).save();
+    await TelegramMessage.create({
+      chatId,
+      text,
+      date: new Date()
+    });
+
     if (msg.chat.type === 'group' || msg.chat.type === 'supergroup') {
       const user = msg.from.username || msg.from.first_name;
       await Brain.create({
@@ -51,22 +50,60 @@ app.post('/webhook', async (req, res) => {
 
     const aiReply = await getAIReply(text);
     if (aiReply) {
-      await bot.sendMessage(chatId, `💬 ${aiReply}`);
+      await sendTelegram(chatId, `💬 ${aiReply}`);
     } else {
-      await bot.sendMessage(chatId, "⚠️ AI failed to respond.");
+      await sendTelegram(chatId, `⚠️ AI failed to respond.`);
     }
+
+    res.sendStatus(200);
   } catch (err) {
     console.error("❌ Error:", err);
-    await bot.sendMessage(chatId, "⚠️ Internal server error.");
+    await sendTelegram(chatId, "⚠️ Internal error. Try again.");
+    res.sendStatus(500);
   }
-
-  res.sendStatus(200);
 });
 
-app.get('/', (req, res) => {
-  res.send('🤖 UremoAI Bot server is running!');
+app.get('/', (req, res) => res.send('🤖 UremoAI bot is live'));
+
+// ✅ Start Express server
+app.listen(PORT, async () => {
+  console.log(`🌐 Express API server and Telegram webhook initialized on port ${PORT}`);
+  await setWebhook();
 });
 
-app.listen(port, () => {
-  console.log(`🌐 Express API server and Telegram webhook initialized`);
-});
+// ✅ Set Webhook
+async function setWebhook() {
+  try {
+    const url = `https://api.telegram.org/bot${token}/setWebhook?url=${SERVER_URL}/webhook`;
+    const res = await axios.get(url);
+    console.log("✅ Webhook set:", res.data);
+  } catch (err) {
+    console.error("❌ Failed to set webhook:", err.message);
+  }
+}
+
+// ✅ AI Handler
+async function getAIReply(prompt) {
+  const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', {
+    model: "openai/gpt-3.5-turbo",
+    messages: [{ role: "user", content: prompt }]
+  }, {
+    headers: {
+      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      'Content-Type': 'application/json'
+    }
+  });
+
+  return response.data.choices[0].message.content;
+}
+
+module.exports = { getAIReply };
+
+// ✅ Send Telegram Message
+async function sendTelegram(chatId, text) {
+  const url = `https://api.telegram.org/bot${token}/sendMessage`;
+  return axios.post(url, {
+    chat_id: chatId,
+    text
+  });
+}
