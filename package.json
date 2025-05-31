@@ -1,0 +1,16 @@
+{
+  "name": "uremoai_bot",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "uremoai_jarvis.js",
+  "scripts": {
+    "start": "node uremoai_jarvis.js"
+  },
+  "dependencies": {
+    "axios": "^1.9.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "mongoose": "^8.15.1",
+    "node-telegram-bot-api": "^0.66.0"
+  }
+}
