@@ -2,6 +2,7 @@ import express from 'express';
 import dotenv from 'dotenv';
 import axios from 'axios';
 import bodyParser from 'body-parser';
+import cors from 'cors'; // <-- add this line
 import { connectDB } from './uremoai_complete/lib/db.js';
 import TelegramMessage from './uremoai_complete/models/telegramMessage.js';
 import Brain from './uremoai_complete/models/brain.js';
@@ -21,6 +22,7 @@ if (!token || !openrouterApiKey || !SERVER_URL) {
 await connectDB();
 
 const app = express();
+app.use(cors()); // <-- add this line
 app.use(bodyParser.json());
 
 // ✅ Set up webhook handler
