@@ -64,6 +64,30 @@ app.post('/webhook', async (req, res) => {
 
 app.get('/', (req, res) => res.send('🤖 UremoAI bot is live'));
 
+// ✅ Add this route to accept frontend chat messages
+app.post("/message", async (req, res) => {
+  const { message, userId } = req.body;
+
+  try {
+    // Save message to DB
+    const msg = new TelegramMessage({
+      chatId: userId,
+      text: message,
+      date: new Date()
+    });
+    await msg.save();
+
+    // Get AI Reply
+    const reply = await getAIReply(message);
+
+    // Return to frontend
+    res.json({ reply });
+  } catch (error) {
+    console.error("❌ Error in /message:", error);
+    res.status(500).json({ error: "Failed to handle message" });
+  }
+});
+
 // ✅ Start Express server
 app.listen(PORT, async () => {
   console.log(`🌐 Express API server and Telegram webhook initialized on port ${PORT}`);
