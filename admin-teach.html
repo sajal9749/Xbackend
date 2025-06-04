@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>JarvisX Admin Trainer</title>
+  </head>
+  <body>
+    <h2>🧠 Teach JarvisX</h2>
+    <form id="teach-form">
+      <input placeholder="Topic" name="topic" required /><br />
+      <textarea
+        placeholder="Knowledge / Answer"
+        name="content"
+        required
+      ></textarea
+      ><br />
+      <input placeholder="Source (optional)" name="source" /><br />
+      <button type="submit">Teach</button>
+    </form>
+    <p id="status"></p>
+
+    <script>
+      document.getElementById("teach-form").onsubmit = async (e) => {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(e.target));
+        const res = await fetch("/teach", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data),
+        });
+        const json = await res.json();
+        document.getElementById("status").textContent = json.success
+          ? "✅ Saved!"
+          : "❌ Error: " + (json.error || "Unknown");
+      };
+    </script>
+  </body>
+</html>

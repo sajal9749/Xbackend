@@ -17,7 +17,7 @@ const SERVER_URL = process.env.SERVER_URL;
 const PORT = process.env.PORT || 10000;
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename); // fixed variable name
+const __dirname = path.dirname(__filename);
 
 if (!token || !openrouterApiKey || !SERVER_URL) {
   console.error(
@@ -32,18 +32,13 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// ✅ Telegram Webhook (Fixed)
+// ✅ Telegram Webhook
 app.post("/webhook", async (req, res) => {
   const msg = req.body.message;
-
-  if (!msg || !msg.text) {
-    return res.status(200).send("No message to handle");
-  }
+  if (!msg || !msg.text || msg.text.startsWith("/")) return res.sendStatus(200);
 
   const chatId = msg.chat.id;
   const text = msg.text;
-
-  console.log("📩 Incoming Telegram message:", text);
 
   try {
     await TelegramMessage.create({ chatId, text, date: new Date() });
@@ -52,19 +47,24 @@ app.post("/webhook", async (req, res) => {
       const user = msg.from.username || msg.from.first_name;
       await Brain.create({
         topic: "Group Chat",
-        content: `${user}: ${text}`, // fixed template string
-        source: "Telegram - " + msg.chat.title,
+        content: `${user}: ${text}`,
+        source: `Telegram - ${msg.chat.title}`,
+        date: new Date(),
       });
     }
 
     const aiReply = await getAIReply(text);
-    await sendTelegram(chatId, aiReply || "⚠ AI failed to respond.");
+    if (aiReply) {
+      await sendTelegram(chatId, `💬 ${aiReply}`);
+    } else {
+      await sendTelegram(chatId, "⚠ AI failed to respond.");
+    }
 
-    res.sendStatus(200); // ✅ Always 200 OK
-  } catch (err) {
-    console.error("❌ Webhook handler error:", err.message);
-    await sendTelegram(chatId, "⚠ Internal error occurred.");
     res.sendStatus(200);
+  } catch (err) {
+    console.error("❌ Error:", err);
+    await sendTelegram(chatId, "⚠ Internal error. Try again.");
+    res.sendStatus(500);
   }
 });
 
@@ -87,37 +87,49 @@ app.post("/message", async (req, res) => {
   }
 });
 
-// ✅ Admin Panel
-app.get("/admin", (req, res) => {
-  res.sendFile(path.join(__dirname, "admin.html")); // fixed __dirname usage
+// ✅ Admin HTML Panel Page
+app.get("/train", (req, res) => {
+  res.sendFile(path.join(__dirname, "admin-teach.html"));
 });
 
-// ✅ Admin Chat Training
-app.post("/admin/chat", async (req, res) => {
-  const { prompt } = req.body;
+// ✅ Admin Teach Endpoint
+app.post("/teach", async (req, res) => {
+  const { topic, content, source } = req.body;
+
+  if (!topic || !content) {
+    return res.status(400).json({ error: "Missing topic or content" });
+  }
 
   try {
-    const reply = await getAIReply(prompt);
-    await Brain.create({
-      topic: "Owner Training",
-      content: `Admin asked: ${prompt}\nAI answered: ${reply}`, // fixed template string
-      source: "Admin Panel",
+    const newMemory = await Brain.create({
+      topic,
+      content,
+      source: source || "Admin Manual Input",
+      date: new Date(),
     });
-
-    res.json({ reply });
+    res.json({ success: true, data: newMemory });
   } catch (err) {
-    console.error("❌ Admin Chat Error:", err.message);
-    res.json({ reply: "⚠ Something went wrong." });
+    res.status(500).json({ error: "Failed to save teaching" });
   }
 });
 
-// ✅ Root
+// ✅ Brain Viewer
+app.get("/brain", async (req, res) => {
+  try {
+    const memories = await Brain.find().sort({ date: -1 }).limit(50);
+    res.json({ memories });
+  } catch (err) {
+    res.status(500).json({ error: "Failed to load brain memories" });
+  }
+});
+
+// ✅ Homepage
 app.get("/", (req, res) => res.send("🤖 UremoAI bot is live"));
 
 // ✅ Start Server
 app.listen(PORT, async () => {
   console.log(
-    `🌐 Express API server and Telegram webhook initialized on port ${PORT}` // fixed template string
+    `🌐 Express API server and Telegram webhook initialized on port ${PORT}`
   );
   await setWebhook();
 });
@@ -125,7 +137,7 @@ app.listen(PORT, async () => {
 // ✅ Webhook Setup
 async function setWebhook() {
   try {
-    const url = `https://api.telegram.org/bot${token}/setWebhook?url=${SERVER_URL}/webhook`; // fixed template string
+    const url = `https://api.telegram.org/bot${token}/setWebhook?url=${SERVER_URL}/webhook`;
     const res = await axios.get(url);
     console.log("✅ Webhook set:", res.data);
   } catch (err) {
@@ -137,7 +149,6 @@ async function setWebhook() {
 async function sendTelegram(chatId, text) {
   try {
     await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
-      // fixed template string
       chat_id: chatId,
       text,
     });
@@ -146,7 +157,7 @@ async function sendTelegram(chatId, text) {
   }
 }
 
-// ✅ AI Reply Handler (OpenRouter)
+// ✅ AI Response Handler
 async function getAIReply(prompt) {
   try {
     const response = await axios.post(
@@ -157,19 +168,18 @@ async function getAIReply(prompt) {
           {
             role: "system",
             content:
-              "You are JarvisX, a smart assistant trained by its creator for deal support and financial help. You learn from corrections and feedback.",
+              "You are JarvisX, a smart assistant for deals and financial help.",
           },
           { role: "user", content: prompt },
         ],
       },
       {
         headers: {
-          Authorization: `Bearer ${openrouterApiKey}`, // fixed template string
+          Authorization: `Bearer ${openrouterApiKey}`,
           "Content-Type": "application/json",
         },
       }
     );
-
     return response.data.choices[0].message.content.trim();
   } catch (err) {
     console.error("❌ AI API Error:", err.message);
