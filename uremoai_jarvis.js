@@ -20,7 +20,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename); // fixed variable name
 
 if (!token || !openrouterApiKey || !SERVER_URL) {
-  // fixed logical operators
   console.error(
     "❌ Missing environment variables. Check your .env or Render settings."
   );
@@ -33,14 +32,18 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// ✅ Telegram Webhook
+// ✅ Telegram Webhook (Fixed)
 app.post("/webhook", async (req, res) => {
   const msg = req.body.message;
-  if (!msg || !msg.text || !msg.text.startsWith("/"))
-    return res.sendStatus(200); // fixed logical operators
+
+  if (!msg || !msg.text) {
+    return res.status(200).send("No message to handle");
+  }
 
   const chatId = msg.chat.id;
   const text = msg.text;
+
+  console.log("📩 Incoming Telegram message:", text);
 
   try {
     await TelegramMessage.create({ chatId, text, date: new Date() });
@@ -55,17 +58,13 @@ app.post("/webhook", async (req, res) => {
     }
 
     const aiReply = await getAIReply(text);
-    if (aiReply) {
-      await sendTelegram(chatId, `💬 ${aiReply}`); // fixed template string
-    } else {
-      await sendTelegram(chatId, `⚠️ AI failed to respond.`); // fixed template string
-    }
+    await sendTelegram(chatId, aiReply || "⚠ AI failed to respond.");
 
-    res.sendStatus(200);
+    res.sendStatus(200); // ✅ Always 200 OK
   } catch (err) {
-    console.error("❌ Error:", err);
-    await sendTelegram(chatId, "⚠️ Internal error. Try again.");
-    res.sendStatus(500);
+    console.error("❌ Webhook handler error:", err.message);
+    await sendTelegram(chatId, "⚠ Internal error occurred.");
+    res.sendStatus(200);
   }
 });
 
@@ -88,12 +87,12 @@ app.post("/message", async (req, res) => {
   }
 });
 
-// ✅ Admin HTML Panel
+// ✅ Admin Panel
 app.get("/admin", (req, res) => {
   res.sendFile(path.join(__dirname, "admin.html")); // fixed __dirname usage
 });
 
-// ✅ Admin Chat Loop
+// ✅ Admin Chat Training
 app.post("/admin/chat", async (req, res) => {
   const { prompt } = req.body;
 
@@ -108,18 +107,18 @@ app.post("/admin/chat", async (req, res) => {
     res.json({ reply });
   } catch (err) {
     console.error("❌ Admin Chat Error:", err.message);
-    res.json({ reply: "⚠️ Something went wrong." });
+    res.json({ reply: "⚠ Something went wrong." });
   }
 });
 
-// ✅ Homepage
+// ✅ Root
 app.get("/", (req, res) => res.send("🤖 UremoAI bot is live"));
 
 // ✅ Start Server
 app.listen(PORT, async () => {
   console.log(
-    `🌐 Express API server and Telegram webhook initialized on port ${PORT}`
-  ); // fixed template string
+    `🌐 Express API server and Telegram webhook initialized on port ${PORT}` // fixed template string
+  );
   await setWebhook();
 });
 
@@ -134,7 +133,7 @@ async function setWebhook() {
   }
 }
 
-// ✅ Telegram Message Sender
+// ✅ Send Telegram Message
 async function sendTelegram(chatId, text) {
   try {
     await axios.post(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -146,7 +145,8 @@ async function sendTelegram(chatId, text) {
     console.error("❌ Failed to send Telegram message:", err.message);
   }
 }
-// ✅ AI Reply (OpenRouter)
+
+// ✅ AI Reply Handler (OpenRouter)
 async function getAIReply(prompt) {
   try {
     const response = await axios.post(
@@ -157,7 +157,7 @@ async function getAIReply(prompt) {
           {
             role: "system",
             content:
-              "You are JarvisX, a smart assistant for deals and financial help.",
+              "You are JarvisX, a smart assistant trained by its creator for deal support and financial help. You learn from corrections and feedback.",
           },
           { role: "user", content: prompt },
         ],
@@ -173,6 +173,6 @@ async function getAIReply(prompt) {
     return response.data.choices[0].message.content.trim();
   } catch (err) {
     console.error("❌ AI API Error:", err.message);
-    return "⚠️ I couldn't think of a response.";
+    return "⚠ I couldn't think of a response.";
   }
 }
