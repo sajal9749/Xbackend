@@ -1,91 +1,118 @@
-<!-- File: admin.html (Place this in root of backend project where uremoai_jarvis.js is) --><!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>JarvisX Admin Panel</title>
+    <title>JarvisX Admin Trainer</title>
     <style>
       body {
         font-family: Arial, sans-serif;
-        background: #f2f2f2;
-        padding: 20px;
+        background-color: #f3f3f3;
+        padding: 0;
+        margin: 0;
       }
-      #chat {
-        max-width: 800px;
-        margin: 0 auto;
-        background: white;
+      .container {
+        max-width: 700px;
+        margin: 30px auto;
+        background-color: #fff;
         padding: 20px;
         border-radius: 10px;
         box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
       }
-      .msg {
+      h2 {
+        text-align: center;
+        margin-bottom: 20px;
+        color: #6b21a8;
+      }
+      .message {
         margin: 10px 0;
+        padding: 10px;
+        border-radius: 5px;
       }
       .user {
-        color: blue;
+        background-color: #e0f7fa;
+        color: #00796b;
       }
-      .ai {
-        color: green;
+      .bot {
+        background-color: #fce4ec;
+        color: #ad1457;
       }
-      #inputForm {
-        display: flex;
-        margin-top: 20px;
-      }
-      #prompt {
-        flex: 1;
+      .chat-box {
+        max-height: 400px;
+        overflow-y: auto;
+        margin-bottom: 10px;
         padding: 10px;
+        background-color: #f9f9f9;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+      }
+      textarea {
+        width: 100%;
+        padding: 10px;
+        margin-top: 10px;
+        border-radius: 5px;
+        border: 1px solid #ccc;
+        resize: vertical;
       }
       button {
         padding: 10px 20px;
-        background: #007bff;
+        background-color: #4f46e5;
         color: white;
         border: none;
+        border-radius: 5px;
         cursor: pointer;
+        margin-top: 10px;
+      }
+      button:hover {
+        background-color: #4338ca;
       }
     </style>
   </head>
   <body>
-    <div id="chat">
-      <h2>🤖 JarvisX Admin Trainer</h2>
-      <div id="conversation"></div>
-      <form id="inputForm">
-        <input
-          type="text"
+    <div class="container">
+      <h2>🧠 JarvisX Admin Trainer</h2>
+      <div class="chat-box" id="chat-box"></div>
+      <form id="admin-form">
+        <textarea
           id="prompt"
-          placeholder="Ask something or provide correction..."
+          rows="3"
+          placeholder="Ask or teach JarvisX..."
           required
-        />
+        ></textarea>
         <button type="submit">Send</button>
       </form>
     </div>
     <script>
-      const form = document.getElementById("inputForm");
+      const chatBox = document.getElementById("chat-box");
+      const form = document.getElementById("admin-form");
       const promptInput = document.getElementById("prompt");
-      const convo = document.getElementById("conversation");
+
+      function appendMessage(sender, text) {
+        const div = document.createElement("div");
+        div.classList.add("message", sender);
+        div.textContent = `${sender === "user" ? "You" : "JarvisX"}: ${text}`;
+        chatBox.appendChild(div);
+        chatBox.scrollTop = chatBox.scrollHeight;
+      }
 
       form.addEventListener("submit", async (e) => {
         e.preventDefault();
-        const prompt = promptInput.value;
+        const prompt = promptInput.value.trim();
+        if (!prompt) return;
+        appendMessage("user", prompt);
         promptInput.value = "";
 
-        const userDiv = document.createElement("div");
-        userDiv.className = "msg user";
-        userDiv.textContent = "You: " + prompt;
-        convo.appendChild(userDiv);
-
-        const res = await fetch("/admin/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ prompt }),
-        });
-
-        const data = await res.json();
-        const aiDiv = document.createElement("div");
-        aiDiv.className = "msg ai";
-        aiDiv.textContent = "JarvisX: " + data.reply;
-        convo.appendChild(aiDiv);
-
-        convo.scrollTop = convo.scrollHeight;
+        try {
+          const res = await fetch("/admin-train", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt }),
+          });
+          const data = await res.json();
+          appendMessage("bot", data.reply);
+        } catch (err) {
+          appendMessage("bot", "⚠ Error getting response.");
+        }
       });
     </script>
   </body>
