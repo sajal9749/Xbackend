@@ -1,3 +1,5 @@
+// 📁 File: uremoai_jarvis.js
+
 import express from "express";
 import dotenv from "dotenv";
 import axios from "axios";
@@ -32,6 +34,35 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
+// ✅ Homepage
+app.get("/", (req, res) => res.send("🤖 UremoAI bot is live"));
+
+// ✅ Serve admin training panel
+app.get("/admin-train", (req, res) => {
+  res.sendFile(path.join(__dirname, "admin-train.html"));
+});
+
+// ✅ Handle Admin Chat + Feedback Training
+app.post("/admin-train", async (req, res) => {
+  const { prompt, feedback } = req.body;
+
+  try {
+    const reply = await getAIReply(prompt);
+
+    // Save training as Brain memory
+    await Brain.create({
+      topic: "Admin Correction",
+      content: `Prompt: ${prompt}\nCorrection: ${feedback || reply}`,
+      source: "Admin Trainer",
+    });
+
+    res.json({ reply });
+  } catch (err) {
+    console.error("❌ Admin Train Error:", err);
+    res.status(500).json({ error: "AI error" });
+  }
+});
+
 // ✅ Telegram Webhook
 app.post("/webhook", async (req, res) => {
   const msg = req.body.message;
@@ -42,106 +73,54 @@ app.post("/webhook", async (req, res) => {
 
   try {
     await TelegramMessage.create({ chatId, text, date: new Date() });
-
-    if (msg.chat.type === "group" || msg.chat.type === "supergroup") {
-      const user = msg.from.username || msg.from.first_name;
-      await Brain.create({
-        topic: "Group Chat",
-        content: `${user}: ${text}`,
-        source: `Telegram - ${msg.chat.title}`,
-        date: new Date(),
-      });
-    }
-
     const aiReply = await getAIReply(text);
-    if (aiReply) {
-      await sendTelegram(chatId, `💬 ${aiReply}`);
-    } else {
-      await sendTelegram(chatId, "⚠ AI failed to respond.");
-    }
-
+    await sendTelegram(
+      chatId,
+      aiReply ? `💬 ${aiReply}` : "⚠ AI failed to respond."
+    );
     res.sendStatus(200);
   } catch (err) {
-    console.error("❌ Error:", err);
-    await sendTelegram(chatId, "⚠ Internal error. Try again.");
+    console.error("❌ Telegram Error:", err);
+    await sendTelegram(chatId, "⚠ Error occurred");
     res.sendStatus(500);
   }
 });
 
-// ✅ Frontend Message API
-app.post("/message", async (req, res) => {
-  const { message, userId } = req.body;
-
+// ✅ AI Handler
+async function getAIReply(prompt) {
   try {
-    await TelegramMessage.create({
-      chatId: userId || "frontend-user",
-      text: message,
-      date: new Date(),
-    });
+    const history = await Brain.find().sort({ createdAt: -1 }).limit(15);
+    const knowledge = history.map((entry) => ({
+      role: "system",
+      content: entry.content,
+    }));
 
-    const reply = await getAIReply(message);
-    res.json({ reply });
-  } catch (error) {
-    console.error("❌ Error in /message:", error);
-    res.status(500).json({ error: "Failed to handle message" });
-  }
-});
+    const response = await axios.post(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        model: "openai/gpt-3.5-turbo",
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are JarvisX, an assistant trained to respond in Sajal's tone for deal-based conversations.",
+          },
+          ...knowledge,
+          { role: "user", content: prompt },
+        ],
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${openrouterApiKey}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
 
-// ✅ Admin HTML Panel Page
-app.get("/train", (req, res) => {
-  res.sendFile(path.join(__dirname, "admin-teach.html"));
-});
-
-// ✅ Admin Teach Endpoint
-app.post("/teach", async (req, res) => {
-  const { topic, content, source } = req.body;
-
-  if (!topic || !content) {
-    return res.status(400).json({ error: "Missing topic or content" });
-  }
-
-  try {
-    const newMemory = await Brain.create({
-      topic,
-      content,
-      source: source || "Admin Manual Input",
-      date: new Date(),
-    });
-    res.json({ success: true, data: newMemory });
+    return response.data.choices[0].message.content.trim();
   } catch (err) {
-    res.status(500).json({ error: "Failed to save teaching" });
-  }
-});
-
-// ✅ Brain Viewer
-app.get("/brain", async (req, res) => {
-  try {
-    const memories = await Brain.find().sort({ date: -1 }).limit(50);
-    res.json({ memories });
-  } catch (err) {
-    res.status(500).json({ error: "Failed to load brain memories" });
-  }
-});
-
-// ✅ Homepage
-app.get("/", (req, res) => res.send("🤖 UremoAI bot is live"));
-
-// ✅ Start Server
-app.listen(PORT, async () => {
-  console.log(
-    `🌐 Express API server and Telegram webhook initialized on port ${PORT}`
-  );
-  await setWebhook();
-});
-
-// ✅ Webhook Setup
-async function setWebhook() {
-  try {
-    const url = `https://api.telegram.org/bot${token}/setWebhook?url=${SERVER_URL}/webhook`;
-    const res = await axios.get(url);
-    console.log("✅ Webhook set:", res.data);
-  } catch (err) {
-    console.error("❌ Failed to set webhook:", err.message);
+    console.error("❌ AI API Error:", err.message);
+    return null;
   }
 }
 
@@ -153,36 +132,19 @@ async function sendTelegram(chatId, text) {
       text,
     });
   } catch (err) {
-    console.error("❌ Failed to send Telegram message:", err.message);
+    console.error("❌ Telegram send error:", err.message);
   }
 }
 
-// ✅ AI Response Handler
-async function getAIReply(prompt) {
+// ✅ Set Webhook and Start Server
+app.listen(PORT, async () => {
+  console.log(`🌐 Server running on http://localhost:${PORT}`);
   try {
-    const response = await axios.post(
-      "https://openrouter.ai/api/v1/chat/completions",
-      {
-        model: "openai/gpt-3.5-turbo",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are JarvisX, a smart assistant for deals and financial help.",
-          },
-          { role: "user", content: prompt },
-        ],
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${openrouterApiKey}`,
-          "Content-Type": "application/json",
-        },
-      }
+    const res = await axios.get(
+      `https://api.telegram.org/bot${token}/setWebhook?url=${SERVER_URL}/webhook`
     );
-    return response.data.choices[0].message.content.trim();
+    console.log("✅ Webhook set:", res.data);
   } catch (err) {
-    console.error("❌ AI API Error:", err.message);
-    return "⚠ I couldn't think of a response.";
+    console.error("❌ Webhook setup error:", err.message);
   }
-}
+});

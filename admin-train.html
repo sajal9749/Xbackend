@@ -1,0 +1,92 @@
+<!-- File: admin.html (Place this in root of backend project where uremoai_jarvis.js is) --><!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JarvisX Admin Panel</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background: #f2f2f2;
+        padding: 20px;
+      }
+      #chat {
+        max-width: 800px;
+        margin: 0 auto;
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      }
+      .msg {
+        margin: 10px 0;
+      }
+      .user {
+        color: blue;
+      }
+      .ai {
+        color: green;
+      }
+      #inputForm {
+        display: flex;
+        margin-top: 20px;
+      }
+      #prompt {
+        flex: 1;
+        padding: 10px;
+      }
+      button {
+        padding: 10px 20px;
+        background: #007bff;
+        color: white;
+        border: none;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="chat">
+      <h2>🤖 JarvisX Admin Trainer</h2>
+      <div id="conversation"></div>
+      <form id="inputForm">
+        <input
+          type="text"
+          id="prompt"
+          placeholder="Ask something or provide correction..."
+          required
+        />
+        <button type="submit">Send</button>
+      </form>
+    </div>
+    <script>
+      const form = document.getElementById("inputForm");
+      const promptInput = document.getElementById("prompt");
+      const convo = document.getElementById("conversation");
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const prompt = promptInput.value;
+        promptInput.value = "";
+
+        const userDiv = document.createElement("div");
+        userDiv.className = "msg user";
+        userDiv.textContent = "You: " + prompt;
+        convo.appendChild(userDiv);
+
+        const res = await fetch("/admin/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt }),
+        });
+
+        const data = await res.json();
+        const aiDiv = document.createElement("div");
+        aiDiv.className = "msg ai";
+        aiDiv.textContent = "JarvisX: " + data.reply;
+        convo.appendChild(aiDiv);
+
+        convo.scrollTop = convo.scrollHeight;
+      });
+    </script>
+  </body>
+</html>
