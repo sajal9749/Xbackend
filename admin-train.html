@@ -2,118 +2,150 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>JarvisX Admin Trainer</title>
+    <title>🧠 JarvisX Admin Trainer</title>
     <style>
       body {
         font-family: Arial, sans-serif;
-        background-color: #f3f3f3;
-        padding: 0;
-        margin: 0;
-      }
-      .container {
-        max-width: 700px;
-        margin: 30px auto;
-        background-color: #fff;
-        padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-      }
-      h2 {
-        text-align: center;
-        margin-bottom: 20px;
-        color: #6b21a8;
-      }
-      .message {
-        margin: 10px 0;
-        padding: 10px;
-        border-radius: 5px;
-      }
-      .user {
-        background-color: #e0f7fa;
-        color: #00796b;
-      }
-      .bot {
-        background-color: #fce4ec;
-        color: #ad1457;
+        background: #f2f2f2;
+        padding: 30px;
       }
       .chat-box {
-        max-height: 400px;
+        max-width: 900px;
+        margin: auto;
+        background: #fff;
+        padding: 20px;
+        border-radius: 10px;
+        height: 80vh;
         overflow-y: auto;
-        margin-bottom: 10px;
-        padding: 10px;
-        background-color: #f9f9f9;
-        border: 1px solid #ddd;
-        border-radius: 5px;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
       }
+      .user {
+        color: blue;
+        margin: 10px 0;
+      }
+      .bot {
+        color: green;
+        margin: 10px 0;
+      }
+      .input-area {
+        max-width: 900px;
+        margin: 20px auto;
+        display: flex;
+        gap: 10px;
+      }
+      input,
       textarea {
-        width: 100%;
         padding: 10px;
-        margin-top: 10px;
-        border-radius: 5px;
+        width: 100%;
         border: 1px solid #ccc;
-        resize: vertical;
+        border-radius: 5px;
       }
       button {
         padding: 10px 20px;
-        background-color: #4f46e5;
-        color: white;
+        background-color: #007bff;
         border: none;
+        color: white;
         border-radius: 5px;
         cursor: pointer;
-        margin-top: 10px;
       }
       button:hover {
-        background-color: #4338ca;
+        background-color: #0056b3;
+      }
+      .section-title {
+        font-weight: bold;
+        margin-top: 20px;
+        color: #333;
       }
     </style>
   </head>
-  <body>
-    <div class="container">
-      <h2>🧠 JarvisX Admin Trainer</h2>
-      <div class="chat-box" id="chat-box"></div>
-      <form id="admin-form">
-        <textarea
-          id="prompt"
-          rows="3"
-          placeholder="Ask or teach JarvisX..."
-          required
-        ></textarea>
-        <button type="submit">Send</button>
-      </form>
-    </div>
-    <script>
-      const chatBox = document.getElementById("chat-box");
-      const form = document.getElementById("admin-form");
-      const promptInput = document.getElementById("prompt");
 
-      function appendMessage(sender, text) {
-        const div = document.createElement("div");
-        div.classList.add("message", sender);
-        div.textContent = `${sender === "user" ? "You" : "JarvisX"}: ${text}`;
-        chatBox.appendChild(div);
-        chatBox.scrollTop = chatBox.scrollHeight;
+  <body>
+    <h2>🧠 JarvisX Admin Trainer</h2>
+
+    <div class="chat-box" id="chatBox"></div>
+
+    <div class="input-area">
+      <input type="text" id="prompt" placeholder="Ask JarvisX something..." />
+      <button onclick="sendMessage()">Send</button>
+    </div>
+
+    <div class="section-title">✍ Correction / Feedback Box</div>
+    <div class="input-area">
+      <textarea
+        id="correction"
+        placeholder="Suggest how this reply could be improved (optional)..."
+      ></textarea>
+      <button onclick="sendCorrection()">✅ Teach</button>
+    </div>
+
+    <p id="statusMsg" style="text-align: center; color: green"></p>
+
+    <script>
+      let lastPrompt = "";
+
+      async function sendMessage() {
+        const prompt = document.getElementById("prompt").value;
+        if (!prompt) return;
+
+        lastPrompt = prompt;
+
+        appendChat("You", prompt, "user");
+        document.getElementById("prompt").value = "";
+
+        const res = await fetch("/admin-train", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ prompt }),
+        });
+
+        const data = await res.json();
+        appendChat("JarvisX", data.reply, "bot");
+        document.getElementById("correction").value = "";
       }
 
-      form.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const prompt = promptInput.value.trim();
-        if (!prompt) return;
-        appendMessage("user", prompt);
-        promptInput.value = "";
-
-        try {
-          const res = await fetch("/admin-train", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ prompt }),
-          });
-          const data = await res.json();
-          appendMessage("bot", data.reply);
-        } catch (err) {
-          appendMessage("bot", "⚠ Error getting response.");
+      async function sendCorrection() {
+        const correction = document.getElementById("correction").value;
+        if (!lastPrompt || !correction) {
+          alert("❗ Please enter both prompt and your correction");
+          return;
         }
-      });
+
+        const res = await fetch("/admin/train", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            prompt: lastPrompt,
+            correctedReply: correction,
+          }),
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          document.getElementById("statusMsg").textContent =
+            "✅ JarvisX learned your correction!";
+          setTimeout(() => {
+            document.getElementById("statusMsg").textContent = "";
+          }, 3000);
+        } else {
+          document.getElementById("statusMsg").textContent =
+            "❌ Failed to save correction.";
+        }
+
+        document.getElementById("correction").value = "";
+      }
+
+      function appendChat(sender, message, cls) {
+        const div = document.createElement("div");
+        div.className = cls;
+        div.innerHTML = `<strong>${sender}:</strong> ${message}`;
+        document.getElementById("chatBox").appendChild(div);
+        document.getElementById("chatBox").scrollTop =
+          document.getElementById("chatBox").scrollHeight;
+      }
     </script>
   </body>
 </html>

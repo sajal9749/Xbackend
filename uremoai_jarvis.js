@@ -10,6 +10,7 @@ import { fileURLToPath } from "url";
 import { connectDB } from "./uremoai_complete/lib/db.js";
 import TelegramMessage from "./uremoai_complete/models/telegramMessage.js";
 import Brain from "./uremoai_complete/models/brain.js";
+import BrainCorrection from "./uremoai_complete/models/brainCorrection.js"; // ✅ Added
 
 dotenv.config();
 
@@ -40,6 +41,27 @@ app.get("/", (req, res) => res.send("🤖 UremoAI bot is live"));
 // ✅ Serve admin training panel
 app.get("/admin-train", (req, res) => {
   res.sendFile(path.join(__dirname, "admin-train.html"));
+});
+
+// ✅ Admin Correction Saver (NEW)
+app.post("/admin/train", async (req, res) => {
+  const { prompt, correctedReply, tags = [] } = req.body;
+
+  try {
+    const entry = await BrainCorrection.create({
+      prompt,
+      correctedReply,
+      tags,
+    });
+    res.json({
+      success: true,
+      message: "✅ Trained successfully",
+      data: entry,
+    });
+  } catch (err) {
+    console.error("❌ Error in saving correction:", err.message);
+    res.status(500).json({ error: "Failed to save correction" });
+  }
 });
 
 // ✅ Handle Admin Chat + Feedback Training
@@ -86,15 +108,19 @@ app.post("/webhook", async (req, res) => {
   }
 });
 
-// ✅ AI Handler
+// ✅ AI Handler (UPDATED)
 async function getAIReply(prompt) {
-  try {
-    const history = await Brain.find().sort({ createdAt: -1 }).limit(15);
-    const knowledge = history.map((entry) => ({
-      role: "system",
-      content: entry.content,
-    }));
+  // 1. Check trained corrections first
+  const corrections = await BrainCorrection.find();
+  for (let c of corrections) {
+    if (prompt.toLowerCase().includes(c.prompt.toLowerCase())) {
+      console.log("🧠 Used Trained Memory");
+      return c.correctedReply;
+    }
+  }
 
+  // 2. Fallback to AI API
+  try {
     const response = await axios.post(
       "https://openrouter.ai/api/v1/chat/completions",
       {
@@ -103,9 +129,8 @@ async function getAIReply(prompt) {
           {
             role: "system",
             content:
-              "You are JarvisX, an assistant trained to respond in Sajal's tone for deal-based conversations.",
+              "You are JarvisX, a smart assistant for deal-making and microjob assistance.",
           },
-          ...knowledge,
           { role: "user", content: prompt },
         ],
       },
@@ -120,7 +145,7 @@ async function getAIReply(prompt) {
     return response.data.choices[0].message.content.trim();
   } catch (err) {
     console.error("❌ AI API Error:", err.message);
-    return null;
+    return "⚠ I couldn't think of a response.";
   }
 }
 
